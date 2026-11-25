@@ -1002,8 +1002,8 @@
       <div class="voice-meter" id="voiceMeter" style="display:none;">
         <div class="voice-meter-fill" id="voiceMeterFill"></div>
       </div>
-      <button class="btn-icon-tiny" id="btnToggleMic" title="تشغيل / كتم المايك">🎙️</button>
-      <button class="btn-icon-tiny" id="btnToggleSpeaker" title="كتم الصوت">🔊</button>
+      <button class="btn-icon-tiny" id="btnToggleMic" title="اسمح للمتصفح باستخدام الميكروفون عند الطلب">🎙️</button>
+      <button class="btn-icon-tiny" id="btnToggleSpeaker" title="تشغيل أو كتم صوت الشريك">🔊</button>
       <button class="btn-icon-tiny" id="btnInstallPWA" title="تثبيت التطبيق على جهازك" style="display:none; color:var(--gold);">📲</button>
     </div>
   </header>
@@ -1564,13 +1564,13 @@
        ---------------------------------------------------- */
     function startVoiceCall() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        updateCallStatus('المايك يحتاج HTTPS ومتصفح حديث', false);
+        updateCallStatus('المكالمة تحتاج HTTPS ومتصفحاً يدعم الميكروفون', false);
         return;
       }
       if (State.voiceCallStarted) return;
       if (!State.dataConn || !State.dataConn.open) return;
       State.voiceCallStarted = true;
-      updateCallStatus('جاري تشغيل المايك...', false);
+      updateCallStatus('قد يمنع النظام أو المتصفح الميكروفون؛ اختر «سماح» عند الطلب لبدء المكالمة', false);
       getLocalAudioStream()
         .then((stream) => {
           if (!State.peer || !State.dataConn || !State.dataConn.open) {
@@ -1584,8 +1584,21 @@
         .catch((err) => {
           State.voiceCallStarted = false;
           console.warn('Could not start voice call:', err);
-          updateCallStatus('اسمح للمايك ثم اضغط 🎙️ للمحاولة', false);
+          updateCallStatus(microphoneErrorMessage(err, 'للمحاولة'), false);
         });
+    }
+
+    function microphoneErrorMessage(err, nextAction) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        return `الميكروفون غير مسموح؛ فعّله من إعدادات الموقع ثم اضغط 🎙️ ${nextAction}`;
+      }
+      if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        return 'لم يتم العثور على ميكروفون متصل بالجهاز.';
+      }
+      if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        return 'الميكروفون مشغول أو غير متاح؛ أغلق التطبيق الذي يستخدمه ثم أعد المحاولة.';
+      }
+      return `تعذر تشغيل الميكروفون؛ تحقق من إعدادات الجهاز والمتصفح ثم اضغط 🎙️ ${nextAction}`;
     }
 
     function getLocalAudioStream() {
@@ -1607,7 +1620,7 @@
 
     function answerVoiceCall(call) {
       if (!call || State.pendingVoiceCall !== call) return;
-      updateCallStatus('جاري تشغيل المايك...', false);
+      updateCallStatus('قد يمنع النظام أو المتصفح الميكروفون؛ اختر «سماح» عند الطلب للرد', false);
       getLocalAudioStream()
         .then((stream) => {
           if (State.pendingVoiceCall !== call) return;
@@ -1619,7 +1632,7 @@
         })
         .catch((err) => {
           console.warn('Could not enable microphone for incoming call:', err);
-          updateCallStatus('اسمح للمايك ثم اضغط 🎙️ للرد', false);
+          updateCallStatus(microphoneErrorMessage(err, 'للرد'), false);
         });
     }
 
@@ -1659,7 +1672,7 @@
         audioEl.srcObject = remoteStream;
         audioEl.muted = State.isSpeakerMuted;
         audioEl.play().catch(() => {
-          updateCallStatus('اضغط الشاشة لتشغيل الصوت', true);
+          updateCallStatus('اسمح بتشغيل الصوت أو اضغط 🔊 لسماع الشريك', true);
         });
         updateCallStatus('مكالمة صوتية نشطة 🟢', true);
         document.getElementById('voiceMeter').style.display = 'flex';
