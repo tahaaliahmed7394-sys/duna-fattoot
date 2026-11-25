@@ -527,43 +527,75 @@
       50% { box-shadow: 0 0 24px rgba(255, 77, 121, 0.9); }
     }
 
-    /* Domino Play Area / Chain Scroll Viewport */
+    /* Domino Play Area / Snaking Chain Viewport */
     .domino-board-viewport {
       flex: 1;
-      overflow-x: auto;
-      overflow-y: hidden;
+      overflow: auto;
       position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
+      display: block;
       padding: 4rem 2rem 5rem;
       z-index: 10;
       cursor: grab;
       direction: ltr;
       touch-action: pan-x pan-y;
-      overscroll-behavior-x: contain;
+      overscroll-behavior: contain;
       scrollbar-width: thin;
       scrollbar-color: var(--rose) rgba(255,255,255,0.12);
     }
     .domino-board-viewport:active {
       cursor: grabbing;
     }
-    .domino-board-viewport::-webkit-scrollbar { height: 6px; }
+    .domino-board-viewport::-webkit-scrollbar { width: 6px; height: 6px; }
     .domino-board-viewport::-webkit-scrollbar-thumb {
       background: var(--rose);
       border-radius: 6px;
     }
     .domino-chain-container {
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      align-items: stretch;
       justify-content: center;
-      gap: 4px;
-      width: max-content;
+      gap: 0.5rem;
+      width: 100%;
       min-width: 100%;
+      min-height: 100%;
       padding: 2rem;
       direction: ltr;
       transform-origin: center center;
       transition: transform 0.2s ease-out;
+    }
+    .domino-chain-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 4px;
+      width: 100%;
+      min-height: 50px;
+      direction: ltr;
+    }
+    .domino-chain-row.reverse {
+      flex-direction: row-reverse;
+    }
+    .domino-chain-row .board-drop-target {
+      padding: 0.25rem 0.4rem;
+      font-size: 0.65rem;
+      white-space: nowrap;
+    }
+    .domino-chain-row .board-tile {
+      width: 26px;
+      height: 50px;
+    }
+    .domino-chain-row .board-tile.horizontal {
+      width: 50px;
+      height: 26px;
+      flex-direction: row;
+    }
+    .domino-chain-row .board-tile .domino-half {
+      padding: 2px;
+    }
+    .domino-chain-row .board-tile .pip-dot {
+      width: 5px;
+      height: 5px;
     }
 
     /* Bone Domino Tile Graphics (CSS/SVG Dots) */
@@ -1020,7 +1052,7 @@
       </div>
 
       <div class="score-target-picker">
-        <label for="targetScoreSelect">نقاط الفوز بالمباراة</label>
+        <label for="targetScoreSelect">نقاط الفوز بالكيم الواحد</label>
         <select id="targetScoreSelect" onchange="setTargetScore(this.value)">
           <option value="51">51</option>
           <option value="101" selected>101</option>
@@ -1087,7 +1119,7 @@
             <span id="oppDisplayName">فطوط (Fattoot)</span>
             <span style="font-size:0.8rem; color:#00e676;">●</span>
           </div>
-          <div class="score-badge">النقاط: <strong id="oppScoreDisplay">0</strong></div>
+          <div class="score-badge">نقاط الكيم: <strong id="oppScoreDisplay">0</strong> · الكيمات: <strong id="oppGamesWonDisplay">0</strong></div>
         </div>
       </div>
 
@@ -1128,7 +1160,7 @@
         <div class="hand-title">
           <span>قطعك الخاصة (<span id="myTilesCount">7</span>)</span>
           <span style="font-size:0.8rem; color:rgba(255,255,255,0.6);">(المجموع: <span id="myPipSum">0</span> نقطة)</span>
-          <span class="score-badge">نقاطك: <strong id="myScoreDisplay">0</strong></span>
+          <span class="score-badge">نقاطك: <strong id="myScoreDisplay">0</strong> · كيماتك: <strong id="myGamesWonDisplay">0</strong></span>
         </div>
         <div class="boneyard-counter">
           🀰 المخزن: <strong id="boneyardCount">14</strong> قطعة
@@ -1334,9 +1366,11 @@
       currentTurnRole: 'Taha', // Whose turn is it
       selectedTileIndex: null,
       scores: { Taha: 0, Fattoot: 0 },
+      matchWins: { Taha: 0, Fattoot: 0 },
       targetScore: 101,
       consecutivePasses: 0,
       isGameOver: false,
+      isMatchOver: false,
       isRoundOver: false,
       guestPips: 0,
       hostPips: 0,
@@ -1379,13 +1413,15 @@
       return code;
     }
 
-    function startLocalTwoPlayersGame(resetScores = true) {
+    function startLocalTwoPlayersGame(resetScores = true, resetMatchWins = true) {
       initAudio();
       setTargetScore(document.getElementById('targetScoreSelect').value);
       State.isHost = true;
       State.isLocalPassAndPlay = true;
       if (resetScores) State.scores = { Taha: 0, Fattoot: 0 };
+      if (resetMatchWins) State.matchWins = { Taha: 0, Fattoot: 0 };
       State.isGameOver = false;
+      State.isMatchOver = false;
       State.isRoundOver = false;
       
       const deck = shuffleDeck(generateFullDeck());
@@ -1447,6 +1483,11 @@
         initAudio();
         setTargetScore(document.getElementById('targetScoreSelect').value);
         State.isHost = true;
+        State.scores = { Taha: 0, Fattoot: 0 };
+        State.matchWins = { Taha: 0, Fattoot: 0 };
+        State.isGameOver = false;
+        State.isMatchOver = false;
+        State.isRoundOver = false;
         State.myRole = 'Taha';
         State.oppRole = 'Fattoot';
         State.roomCode = generateRoomCode();
@@ -1733,8 +1774,10 @@
         State.boardChain = payload.boardChain;
         State.boardFocusSide = 'right';
         State.scores = payload.scores;
+        State.matchWins = payload.matchWins;
         State.targetScore = payload.targetScore;
         State.isGameOver = false;
+        State.isMatchOver = false;
         State.openEnds = payload.openEnds;
         State.currentTurnRole = payload.currentTurnRole;
         State.openingTileId = payload.openingTileId ?? null;
@@ -1765,11 +1808,22 @@
         }
         playSound('place');
       }
-      else if (type === 'NEW_GAME_REQUEST') {
-        if (State.isHost && State.isGameOver) {
+      else if (type === 'NEXT_GAME_REQUEST') {
+        if (State.isHost && State.isGameOver && !State.isMatchOver) {
           document.getElementById('roundWinnerModal').classList.remove('active');
           State.scores = { Taha: 0, Fattoot: 0 };
           State.isGameOver = false;
+          State.isRoundOver = false;
+          hostInitializeNewMatch();
+        }
+      }
+      else if (type === 'NEW_MATCH_REQUEST') {
+        if (State.isHost && State.isMatchOver) {
+          document.getElementById('roundWinnerModal').classList.remove('active');
+          State.scores = { Taha: 0, Fattoot: 0 };
+          State.matchWins = { Taha: 0, Fattoot: 0 };
+          State.isGameOver = false;
+          State.isMatchOver = false;
           State.isRoundOver = false;
           hostInitializeNewMatch();
         }
@@ -1834,6 +1888,7 @@
       State.matchInitialized = true;
       State.isRoundOver = false;
       State.isGameOver = false;
+      State.isMatchOver = false;
 
       // Decide who starts according to domino rules: Highest Double (or highest pip tile)
       let startingRole = State.myRole;
@@ -1883,6 +1938,7 @@
         currentTurnRole: startingRole,
         openingTileId: openingTile.id,
         scores: State.scores,
+        matchWins: State.matchWins,
         targetScore: State.targetScore
       });
 
@@ -1948,7 +2004,9 @@
       renderTurnBanner();
       document.getElementById('boneyardCount').textContent = State.boneyardCount;
       document.getElementById('oppScoreDisplay').textContent = State.scores[State.oppRole];
+      document.getElementById('oppGamesWonDisplay').textContent = State.matchWins[State.oppRole];
       document.getElementById('myScoreDisplay').textContent = State.scores[State.myRole];
+      document.getElementById('myGamesWonDisplay').textContent = State.matchWins[State.myRole];
       scheduleAutomaticDraw();
     }
 
@@ -1992,55 +2050,93 @@
       container.innerHTML = '';
 
       if (State.boardChain.length === 0) {
-        const emptyMsg = document.getElementById('emptyBoardMsg');
-        if (emptyMsg) {
-          emptyMsg.style.display = 'block';
-          container.appendChild(emptyMsg);
-        }
+        const emptyMsg = document.createElement('div');
+        emptyMsg.id = 'emptyBoardMsg';
+        emptyMsg.style.cssText = 'color:rgba(255,255,255,0.4);font-size:1rem;text-align:center;';
+        emptyMsg.textContent = '🌹 الطاولة بانتظار القطعة الأولى لافتتاح الحب 🌹';
+        container.appendChild(emptyMsg);
         return;
       }
-      const emptyMsg = document.getElementById('emptyBoardMsg');
-      if (emptyMsg) emptyMsg.style.display = 'none';
 
       const isMyTurn = State.currentTurnRole === State.myRole;
       const selectedTile = State.selectedTileIndex !== null ? State.myHand[State.selectedTileIndex] : null;
+      const viewport = document.getElementById('boardViewport');
+      const viewportStyle = getComputedStyle(viewport);
+      const containerStyle = getComputedStyle(container);
+      const horizontalPadding = parseFloat(viewportStyle.paddingLeft) +
+        parseFloat(viewportStyle.paddingRight) +
+        parseFloat(containerStyle.paddingLeft) +
+        parseFloat(containerStyle.paddingRight);
+      const maxRowWidth = Math.max(50, viewport.clientWidth - horizontalPadding);
+      const rows = [{ items: [], width: 0 }];
 
-      // Left Play Target Button if valid
+      function addItem(item) {
+        let row = rows[rows.length - 1];
+        const nextWidth = row.width + (row.items.length ? 4 : 0) + item.width;
+        if (row.items.length && nextWidth > maxRowWidth) {
+          row = { items: [], width: 0 };
+          rows.push(row);
+        }
+        row.width += (row.items.length ? 4 : 0) + item.width;
+        row.items.push(item);
+      }
+
       if (isMyTurn && selectedTile && canPlayOnEnd(selectedTile, 'left')) {
-        const leftTarget = document.createElement('div');
-        leftTarget.className = 'board-drop-target';
-        leftTarget.textContent = '⬅️ إلصاق هنا';
-        leftTarget.onclick = () => placeSelectedTile('left');
-        container.appendChild(leftTarget);
+        addItem({ type: 'target', side: 'left', width: 72 });
       }
-
-      // Render chain of played tiles
-      State.boardChain.forEach((tile) => {
-        const isDouble = tile.left === tile.right;
-        const tileEl = createTileElement(tile, !isDouble, false);
-        container.appendChild(tileEl);
+      State.boardChain.forEach(tile => {
+        addItem({
+          type: 'tile',
+          tile,
+          width: tile.left === tile.right ? 26 : 50
+        });
       });
-
-      // Right Play Target Button if valid
       if (isMyTurn && selectedTile && canPlayOnEnd(selectedTile, 'right')) {
-        const rightTarget = document.createElement('div');
-        rightTarget.className = 'board-drop-target';
-        rightTarget.textContent = 'إلصاق هنا ➡️';
-        rightTarget.onclick = () => placeSelectedTile('right');
-        container.appendChild(rightTarget);
+        addItem({ type: 'target', side: 'right', width: 72 });
       }
+
+      rows.forEach((row, rowIndex) => {
+        const rowElement = document.createElement('div');
+        rowElement.className = 'domino-chain-row' + (rowIndex % 2 ? ' reverse' : '');
+
+        row.items.forEach(item => {
+          if (item.type === 'target') {
+            const target = document.createElement('div');
+            target.className = 'board-drop-target';
+            target.textContent = 'إلصاق هنا';
+            target.onclick = () => placeSelectedTile(item.side);
+            rowElement.appendChild(target);
+            return;
+          }
+
+          const isDouble = item.tile.left === item.tile.right;
+          const tile = rowIndex % 2
+            ? { ...item.tile, left: item.tile.right, right: item.tile.left }
+            : item.tile;
+          const tileElement = createTileElement(tile, !isDouble, false);
+          tileElement.classList.add('board-tile');
+          rowElement.appendChild(tileElement);
+        });
+        container.appendChild(rowElement);
+      });
     }
 
     function scrollBoardToSide(side) {
       const viewport = document.getElementById('boardViewport');
+      const tiles = viewport.querySelectorAll('.board-tile');
+      if (!tiles.length) return;
+      const tile = side === 'left' ? tiles[0] : tiles[tiles.length - 1];
       requestAnimationFrame(() => {
-        const maxScroll = viewport.scrollWidth - viewport.clientWidth;
+        const viewportTop = viewport.getBoundingClientRect().top;
+        const rowTop = tile.closest('.domino-chain-row').getBoundingClientRect().top;
         viewport.scrollTo({
-          left: side === 'left' ? 0 : maxScroll,
+          top: Math.max(0, viewport.scrollTop + rowTop - viewportTop),
           behavior: 'smooth'
         });
       });
     }
+
+    window.addEventListener('resize', renderBoardChain);
 
     (function enableBoardMouseDrag() {
       const viewport = document.getElementById('boardViewport');
@@ -2048,12 +2144,19 @@
 
       viewport.addEventListener('pointerdown', (event) => {
         if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('.board-drop-target')) return;
-        dragStart = { pointerId: event.pointerId, x: event.clientX, scrollLeft: viewport.scrollLeft };
+        dragStart = {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          scrollLeft: viewport.scrollLeft,
+          scrollTop: viewport.scrollTop
+        };
         viewport.setPointerCapture(event.pointerId);
       });
       viewport.addEventListener('pointermove', (event) => {
         if (dragStart && event.pointerId === dragStart.pointerId) {
           viewport.scrollLeft = dragStart.scrollLeft - (event.clientX - dragStart.x);
+          viewport.scrollTop = dragStart.scrollTop - (event.clientY - dragStart.y);
         }
       });
       const stopDragging = (event) => {
@@ -2335,14 +2438,20 @@
         : 0;
       if (winnerRole) State.scores[winnerRole] += pointsGained;
       State.isGameOver = Boolean(winnerRole && State.scores[winnerRole] >= State.targetScore);
+      if (State.isGameOver) {
+        State.matchWins[winnerRole]++;
+        State.isMatchOver = State.matchWins[winnerRole] >= 3;
+      }
 
       const result = {
         winnerRole,
         reason,
         pointsGained,
         scores: { ...State.scores },
+        matchWins: { ...State.matchWins },
         targetScore: State.targetScore,
-        gameOver: State.isGameOver
+        gameOver: State.isGameOver,
+        matchOver: State.isMatchOver
       };
       showRoundResult(result);
       sendPacket('ROUND_WIN', result);
@@ -2350,39 +2459,50 @@
 
     function handleRoundWinnerNotification(payload) {
       State.scores = payload.scores;
+      State.matchWins = payload.matchWins;
       State.targetScore = payload.targetScore;
       State.isRoundOver = true;
       State.isGameOver = payload.gameOver;
+      State.isMatchOver = payload.matchOver;
       playSound('win');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       showRoundResult(payload);
     }
 
     function showRoundResult(result) {
-      const { winnerRole, pointsGained, scores, targetScore, gameOver } = result;
+      const { winnerRole, pointsGained, scores, matchWins, targetScore, gameOver, matchOver } = result;
       const isTie = !winnerRole;
       const isMeWinner = winnerRole === State.myRole;
       const winnerName = winnerRole === 'Taha' ? 'طه' : 'فطوط';
+      const matchScore = `${matchWins.Taha}-${matchWins.Fattoot}`;
       const title = isTie
         ? 'تعادل بالربط'
-        : gameOver
-          ? (isMeWinner ? 'فزت بالمباراة! 🏆' : `فاز ${winnerName} بالمباراة 🏆`)
+        : matchOver
+          ? (isMeWinner ? `فزت بالمباراة ${matchScore}! 🏆` : `فاز ${winnerName} بالمباراة ${matchScore} 🏆`)
+          : gameOver
+            ? (isMeWinner ? `فزت بالكيم! ${matchScore}` : `فاز ${winnerName} بالكيم! ${matchScore}`)
           : (isMeWinner ? 'فزت بالجولة! 🎉' : `فاز ${winnerName} بالجولة ❤️`);
       const desc = isTie
         ? 'تعادل مجموع الصايات، ما تنضاف نقاط. نعيد الجولة.'
-        : gameOver
-          ? `وصل ${winnerName} إلى ${scores[winnerRole]} من ${targetScore} نقطة وفاز بالمباراة.`
+        : matchOver
+          ? `النتيجة النهائية (طه - فطوط): ${matchScore}.`
+          : gameOver
+            ? `وصل ${winnerName} إلى ${scores[winnerRole]} من ${targetScore} نقطة. نتيجة الكيمات: ${matchScore}.`
           : `${winnerName} حصل على ${pointsGained} نقطة. المجموع: ${scores[winnerRole]} من ${targetScore}.`;
 
       document.getElementById('myScoreDisplay').textContent = State.scores[State.myRole];
       document.getElementById('oppScoreDisplay').textContent = State.scores[State.oppRole];
+      document.getElementById('myGamesWonDisplay').textContent = State.matchWins[State.myRole];
+      document.getElementById('oppGamesWonDisplay').textContent = State.matchWins[State.oppRole];
       document.getElementById('modalWinnerTitle').textContent = title;
       document.getElementById('modalWinnerDesc').textContent = desc;
-      document.getElementById('roundWinnerButtonText').textContent = gameOver
-        ? '🔄 لعبة جديدة'
-        : isTie
-          ? '🔄 إعادة الجولة'
-          : '🎮 بدء الجولة التالية';
+      document.getElementById('roundWinnerButtonText').textContent = matchOver
+        ? '🔄 مباراة جديدة'
+        : gameOver
+          ? '🎮 بدء الكيم التالي'
+          : isTie
+            ? '🔄 إعادة الجولة'
+            : '🎮 بدء الجولة التالية';
       document.getElementById('roundWinnerModal').classList.add('active');
     }
 
@@ -2391,16 +2511,19 @@
       State.isRoundOver = false;
       if (State.isLocalPassAndPlay) {
         if (State.isGameOver) State.scores = { Taha: 0, Fattoot: 0 };
-        startLocalTwoPlayersGame(State.isGameOver);
+        if (State.isMatchOver) State.matchWins = { Taha: 0, Fattoot: 0 };
+        startLocalTwoPlayersGame(false, false);
         return;
       }
       if (State.isGameOver) {
         if (State.isHost) {
           State.scores = { Taha: 0, Fattoot: 0 };
+          if (State.isMatchOver) State.matchWins = { Taha: 0, Fattoot: 0 };
           State.isGameOver = false;
+          State.isMatchOver = false;
           hostInitializeNewMatch();
         } else {
-          sendPacket('NEW_GAME_REQUEST', {});
+          sendPacket(State.isMatchOver ? 'NEW_MATCH_REQUEST' : 'NEXT_GAME_REQUEST', {});
           updateCallStatus('بانتظار صاحب الغرفة لبدء لعبة جديدة...', false);
         }
         return;
