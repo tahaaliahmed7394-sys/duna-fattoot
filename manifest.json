@@ -1,7 +1,7 @@
 {
   "name": "Taha ❤️ Fattoot — Domino Duo",
   "short_name": "Domino Duo",
-  "description": "Our Special Domino Game Made With Love ❤️",
+  "description": "لعبة دومينو مباشرة لشخصين مع مكالمات صوتية وتفاعلات.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#18050e",
@@ -19,6 +19,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

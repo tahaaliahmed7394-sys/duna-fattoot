@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Taha and Fattoot Domino</title>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#421029"/>
+      <stop offset="1" stop-color="#19040f"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#ff4d79" stop-opacity=".38"/>
+      <stop offset="1" stop-color="#ff4d79" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf7"/>
+      <stop offset="1" stop-color="#f2dec9"/>
+    </linearGradient>
+    <filter id="shadow" x="-.3" y="-.2" width="1.6" height="1.5">
+      <feDropShadow dx="0" dy="14" stdDeviation="13" flood-color="#080107" flood-opacity=".58"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#background)"/>
+  <circle cx="256" cy="256" r="220" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="216" fill="none" stroke="#ff8aa5" stroke-opacity=".24" stroke-width="5"/>
+  <g transform="rotate(-8 256 256)" filter="url(#shadow)">
+    <g transform="translate(26 26) scale(.9)">
+      <rect x="151" y="61" width="210" height="390" rx="38" fill="url(#ivory)" stroke="#ffd889" stroke-width="9"/>
+      <path d="M162 256h188" stroke="#d7bca9" stroke-width="7" stroke-linecap="round"/>
+      <g fill="#d92f68">
+        <circle cx="211" cy="129" r="16"/>
+        <circle cx="301" cy="171" r="16"/>
+        <circle cx="211" cy="213" r="16"/>
+      </g>
+      <g fill="#321021">
+        <circle cx="211" cy="300" r="16"/>
+        <circle cx="301" cy="343" r="16"/>
+        <circle cx="211" cy="386" r="16"/>
+      </g>
+    </g>
+  </g>
+  <path d="M389 88c-17-20-48 4-28 25l29 29 29-29c20-21-11-45-30-25Z" fill="#ff4d79" stroke="#ffd889" stroke-width="5"/>
+  <path d="m120 365 7 16 17 2-13 11 4 17-15-9-15 9 4-17-13-11 17-2Z" fill="#ffd889" opacity=".92"/>
+</svg>

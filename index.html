@@ -6,9 +6,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Taha ❤️ Fattoot">
+  <link rel="icon" type="image/svg+xml" href="./logo.svg">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#ff4d79">
+  <meta property="og:image" content="https://tahaaliahmed7394-sys.github.io/duna-fattoot/icon-512.png">
   <title>Taha ❤️ Fattoot — دومينو لنا</title>
   
   <!-- Supabase Client v2 -->
@@ -169,6 +171,13 @@
       display: inline-block;
       animation: beat 1.4s ease-in-out infinite;
       filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+    }
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      flex: 0 0 auto;
+      border-radius: 9px;
+      box-shadow: 0 0 12px rgba(255, 77, 121, 0.3);
     }
     @keyframes beat {
       0%, 100% { transform: scale(1); }
@@ -990,6 +999,7 @@
   <!-- Header with Brand & Live Voice Status -->
   <header class="main-header">
     <div class="brand-couple">
+      <img class="brand-mark" src="./logo.svg" alt="شعار دومينو طه وفطوط">
       <span>Taha</span>
       <span class="heart-glow">❤</span>
       <span>Fattoot</span>
