@@ -1369,6 +1369,7 @@
       matchWins: { Taha: 0, Fattoot: 0 },
       targetScore: 101,
       consecutivePasses: 0,
+      hasDrawnThisTurn: false,
       isGameOver: false,
       isMatchOver: false,
       isRoundOver: false,
@@ -1433,6 +1434,7 @@
       State.boardFocusSide = 'right';
       State.openEnds = { left: null, right: null };
       State.consecutivePasses = 0;
+      State.hasDrawnThisTurn = false;
 
       // Rule: Highest Double begins
       let maxD1 = -1, maxD2 = -1;
@@ -1488,6 +1490,7 @@
         State.isGameOver = false;
         State.isMatchOver = false;
         State.isRoundOver = false;
+        State.hasDrawnThisTurn = false;
         State.myRole = 'Taha';
         State.oppRole = 'Fattoot';
         State.roomCode = generateRoomCode();
@@ -1776,6 +1779,8 @@
         State.scores = payload.scores;
         State.matchWins = payload.matchWins;
         State.targetScore = payload.targetScore;
+        State.consecutivePasses = 0;
+        State.hasDrawnThisTurn = false;
         State.isGameOver = false;
         State.isMatchOver = false;
         State.openEnds = payload.openEnds;
@@ -1794,6 +1799,8 @@
         State.oppTilesCount = payload.oppTilesCount;
         State.boneyardCount = payload.boneyardCount;
         State.currentTurnRole = payload.currentTurnRole;
+        State.consecutivePasses = payload.consecutivePasses ?? State.consecutivePasses;
+        State.hasDrawnThisTurn = false;
         if (payload.playedSide === 'left' || payload.playedSide === 'right') {
           State.boardFocusSide = payload.playedSide;
         }
@@ -1832,6 +1839,7 @@
         // Only sent to the specific drawer
         State.myHand.push(payload.tile);
         State.boneyardCount = payload.boneyardCount;
+        State.hasDrawnThisTurn = true;
         renderAll();
         playSound('draw');
       }
@@ -1846,15 +1854,22 @@
       }
       else if (type === 'BLOCKED_GAME_EVAL') {
         if (State.isHost) {
+          if (State.isRoundOver || State.boneyardCount > 0 || !Number.isFinite(payload.pips)) return;
           const myPips = State.myHand.reduce((acc, t) => acc + t.left + t.right, 0);
           const guestPips = payload.pips;
           if (guestPips === myPips) {
             finishRound(null, 'blocked', 0);
             return;
           }
-          const winnerRole = guestPips < myPips ? payload.role : State.myRole;
+          const winnerRole = guestPips < myPips ? State.oppRole : State.myRole;
           const loserPips = winnerRole === State.myRole ? guestPips : myPips;
           finishRound(winnerRole, 'blocked', loserPips);
+        }
+      }
+      else if (type === 'BLOCKED_GAME_REQUEST') {
+        if (!State.isHost && !State.isRoundOver && State.boneyardCount === 0) {
+          const pips = State.myHand.reduce((sum, tile) => sum + tile.left + tile.right, 0);
+          sendPacket('BLOCKED_GAME_EVAL', { pips, role: State.myRole });
         }
       }
       else if (type === 'ROUND_WIN') {
@@ -1885,6 +1900,7 @@
       State.boardFocusSide = 'right';
       State.openEnds = { left: null, right: null };
       State.consecutivePasses = 0;
+      State.hasDrawnThisTurn = false;
       State.matchInitialized = true;
       State.isRoundOver = false;
       State.isGameOver = false;
@@ -2040,8 +2056,10 @@
         document.getElementById('turnBannerText').textContent = 'دور ' + (State.oppRole === 'Taha' ? 'طه' : 'فطوط') + ' الآن...';
       }
 
-      document.getElementById('btnDraw').disabled = !isMyTurn || State.boneyardCount === 0 || hasPlayableTile;
-      document.getElementById('btnPass').disabled = !isMyTurn || hasPlayableTile || State.boneyardCount > 0;
+      document.getElementById('btnDraw').disabled =
+        !isMyTurn || State.boneyardCount === 0 || hasPlayableTile || State.hasDrawnThisTurn;
+      document.getElementById('btnPass').disabled =
+        !isMyTurn || hasPlayableTile || (State.boneyardCount > 0 && !State.hasDrawnThisTurn);
     }
 
     function renderBoardChain() {
@@ -2280,6 +2298,7 @@
       State.myHand.splice(State.selectedTileIndex, 1);
       State.selectedTileIndex = null;
       State.consecutivePasses = 0;
+      State.hasDrawnThisTurn = false;
       State.boardFocusSide = side === 'left' ? 'left' : 'right';
       playSound('place');
 
@@ -2307,7 +2326,8 @@
         openEnds: State.openEnds,
         oppTilesCount: State.myHand.length,
         boneyardCount: State.boneyardCount,
-        currentTurnRole: State.currentTurnRole
+        currentTurnRole: State.currentTurnRole,
+        consecutivePasses: State.consecutivePasses
       });
     }
 
@@ -2317,6 +2337,10 @@
         alert('المخزن فارغ! لا توجد قطع إضافية.');
         return;
       }
+      if (State.hasDrawnThisTurn || State.myHand.some(tile =>
+        canPlayOnEnd(tile, 'left') || canPlayOnEnd(tile, 'right')
+      )) return;
+      State.hasDrawnThisTurn = true;
 
       if (State.isHost) {
         const drawn = State.boneyard.pop();
@@ -2351,7 +2375,7 @@
       );
       if (playableTile) return;
 
-      if (State.boneyardCount > 0) {
+      if (State.boneyardCount > 0 && !State.hasDrawnThisTurn) {
         if (State.autoTurnTimer) return;
         State.autoTurnTimer = setTimeout(() => {
           State.autoTurnTimer = null;
@@ -2369,8 +2393,12 @@
     }
 
     function handleAutoPass() {
+      if ((State.boneyardCount > 0 && !State.hasDrawnThisTurn) || State.myHand.some(tile =>
+        canPlayOnEnd(tile, 'left') || canPlayOnEnd(tile, 'right')
+      )) return;
       State.consecutivePasses++;
-      if (State.consecutivePasses >= 2) {
+      State.hasDrawnThisTurn = false;
+      if (State.consecutivePasses >= 2 && State.boneyardCount === 0) {
         handleBlockedGameCheck();
         return;
       }
@@ -2382,16 +2410,21 @@
         openEnds: State.openEnds,
         oppTilesCount: State.myHand.length,
         boneyardCount: State.boneyardCount,
-        currentTurnRole: State.currentTurnRole
+        currentTurnRole: State.currentTurnRole,
+        consecutivePasses: State.consecutivePasses
       });
     }
 
     function handlePassTurn() {
       if (State.currentTurnRole !== State.myRole) return;
+      if ((State.boneyardCount > 0 && !State.hasDrawnThisTurn) || State.myHand.some(tile =>
+        canPlayOnEnd(tile, 'left') || canPlayOnEnd(tile, 'right')
+      )) return;
       State.consecutivePasses++;
+      State.hasDrawnThisTurn = false;
 
       // If both players pass consecutively and boneyard is empty -> Blocked game!
-      if (State.consecutivePasses >= 2) {
+      if (State.consecutivePasses >= 2 && State.boneyardCount === 0) {
         handleBlockedGameCheck();
         return;
       }
@@ -2406,12 +2439,14 @@
         openEnds: State.openEnds,
         oppTilesCount: State.myHand.length,
         boneyardCount: State.boneyardCount,
-        currentTurnRole: State.currentTurnRole
+        currentTurnRole: State.currentTurnRole,
+        consecutivePasses: State.consecutivePasses
       });
     }
 
     function handleBlockedGameCheck() {
       // Smallest pip sum wins in blocked game
+      if (State.boneyardCount > 0 || State.consecutivePasses < 2) return;
       if (State.isLocalPassAndPlay) {
         const tahaPips = State.localP1Hand.reduce((sum, tile) => sum + tile.left + tile.right, 0);
         const fattootPips = State.localP2Hand.reduce((sum, tile) => sum + tile.left + tile.right, 0);
@@ -2423,8 +2458,12 @@
         finishRound(winnerRole, 'blocked', Math.max(tahaPips, fattootPips));
         return;
       }
-      const myPips = State.myHand.reduce((acc, t) => acc + t.left + t.right, 0);
-      sendPacket('BLOCKED_GAME_EVAL', { pips: myPips, role: State.myRole });
+      if (State.isHost) {
+        sendPacket('BLOCKED_GAME_REQUEST', {});
+      } else {
+        const myPips = State.myHand.reduce((acc, tile) => acc + tile.left + tile.right, 0);
+        sendPacket('BLOCKED_GAME_EVAL', { pips: myPips, role: State.myRole });
+      }
     }
 
     function finishRound(winnerRole, reason, lostPips = 0) {
