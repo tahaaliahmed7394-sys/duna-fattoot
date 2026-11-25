@@ -735,19 +735,17 @@
       border-radius: 4px;
     }
 
-    /* Quick Interaction Reactions floating bar */
+    /* Quick reactions in the bottom controls */
     .reactions-bar {
-      position: absolute;
-      top: 7rem;
-      right: 0.75rem;
-      z-index: 30;
       display: flex;
-      flex-direction: row;
-      gap: 0.3rem;
+      align-items: center;
+      gap: 0.25rem;
+      flex: 0 0 auto;
     }
     .btn-reaction {
       width: 34px;
       height: 34px;
+      flex: 0 0 34px;
       border-radius: 50%;
       background: rgba(25, 6, 17, 0.85);
       border: 1.5px solid var(--rose);
@@ -778,37 +776,19 @@
       100% { transform: scale(1.8) translateY(-320px); opacity: 0; }
     }
 
-    /* Bottom Action Controls (Draw & Pass) */
+    /* Bottom chat and reaction controls */
     .controls-row {
       display: flex;
-      gap: 0.6rem;
+      justify-content: space-between;
       align-items: center;
-      justify-content: center;
+      gap: 0.5rem;
     }
     .btn-ctrl {
-      flex: 1;
-      padding: 0.7rem;
-      font-size: 0.95rem;
-      font-weight: 700;
-      font-family: 'Cairo', sans-serif;
-      border-radius: 999px;
-      border: none;
-      cursor: pointer;
-      transition: all 0.2s;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.4rem;
-    }
-    .btn-ctrl.draw {
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: #fff;
-      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
-    }
-    .btn-ctrl.pass {
-      background: rgba(255,255,255,0.1);
-      border: 1.5px solid rgba(255,255,255,0.3);
-      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
     }
     .btn-ctrl.chat-toggle {
       flex: 0 0 50px;
@@ -1135,15 +1115,6 @@
       <span id="turnBannerText">في انتظار بدء الجولة...</span>
     </div>
 
-    <!-- Floating Quick Reactions Bar -->
-    <div class="reactions-bar">
-      <button class="btn-reaction" onclick="sendReaction('❤️')" title="قلب حب">❤️</button>
-      <button class="btn-reaction" onclick="sendReaction('😍')" title="عشق">😍</button>
-      <button class="btn-reaction" onclick="sendReaction('😂')" title="ضحك">😂</button>
-      <button class="btn-reaction" onclick="sendReaction('😮')" title="تفاجؤ">😮</button>
-      <button class="btn-reaction" onclick="sendReaction('😢')" title="حزن">😢</button>
-    </div>
-
     <!-- Main Domino Chain Playfield (Viewport with pan/zoom) -->
     <div class="domino-board-viewport" id="boardViewport">
       <div class="domino-chain-container" id="dominoChainContainer">
@@ -1172,14 +1143,15 @@
         <!-- My tiles render here -->
       </div>
 
-      <!-- Action Buttons Row -->
+      <!-- Reactions and chat controls -->
       <div class="controls-row">
-        <button class="btn-ctrl draw" id="btnDraw" onclick="handleDrawTile()">
-          <span>🎴 سحب من المخزن</span>
-        </button>
-        <button class="btn-ctrl pass" id="btnPass" onclick="handlePassTurn()">
-          <span>⏭️ تمرير الدور (باس)</span>
-        </button>
+        <div class="reactions-bar" aria-label="تفاعلات سريعة">
+          <button class="btn-reaction" onclick="sendReaction('❤️')" title="قلب حب">❤️</button>
+          <button class="btn-reaction" onclick="sendReaction('😍')" title="عشق">😍</button>
+          <button class="btn-reaction" onclick="sendReaction('😂')" title="ضحك">😂</button>
+          <button class="btn-reaction" onclick="sendReaction('😮')" title="تفاجؤ">😮</button>
+          <button class="btn-reaction" onclick="sendReaction('😢')" title="حزن">😢</button>
+        </div>
         <button class="btn-ctrl chat-toggle" onclick="toggleChatDrawer()" title="الدردشة">
           <span>💬</span>
           <div class="chat-unread-dot" id="chatUnreadDot"></div>
@@ -2041,9 +2013,6 @@
       const banner = document.getElementById('turnBanner');
       const isMyTurn = State.currentTurnRole === State.myRole;
       banner.classList.toggle('my-turn', isMyTurn);
-      const hasPlayableTile = State.myHand.some(tile =>
-        canPlayOnEnd(tile, 'left') || canPlayOnEnd(tile, 'right')
-      );
 
       if (isMyTurn) {
         document.getElementById('turnBannerIcon').textContent = '💚';
@@ -2056,10 +2025,6 @@
         document.getElementById('turnBannerText').textContent = 'دور ' + (State.oppRole === 'Taha' ? 'طه' : 'فطوط') + ' الآن...';
       }
 
-      document.getElementById('btnDraw').disabled =
-        !isMyTurn || State.boneyardCount === 0 || hasPlayableTile || State.hasDrawnThisTurn;
-      document.getElementById('btnPass').disabled =
-        !isMyTurn || hasPlayableTile || (State.boneyardCount > 0 && !State.hasDrawnThisTurn);
     }
 
     function renderBoardChain() {
@@ -2404,35 +2369,6 @@
       }
       State.currentTurnRole = State.oppRole;
       if (State.isLocalPassAndPlay) syncLocalView();
-      renderAll();
-      sendPacket('STATE_UPDATE', {
-        boardChain: State.boardChain,
-        openEnds: State.openEnds,
-        oppTilesCount: State.myHand.length,
-        boneyardCount: State.boneyardCount,
-        currentTurnRole: State.currentTurnRole,
-        consecutivePasses: State.consecutivePasses
-      });
-    }
-
-    function handlePassTurn() {
-      if (State.currentTurnRole !== State.myRole) return;
-      if ((State.boneyardCount > 0 && !State.hasDrawnThisTurn) || State.myHand.some(tile =>
-        canPlayOnEnd(tile, 'left') || canPlayOnEnd(tile, 'right')
-      )) return;
-      State.consecutivePasses++;
-      State.hasDrawnThisTurn = false;
-
-      // If both players pass consecutively and boneyard is empty -> Blocked game!
-      if (State.consecutivePasses >= 2 && State.boneyardCount === 0) {
-        handleBlockedGameCheck();
-        return;
-      }
-
-      State.currentTurnRole = State.oppRole;
-      if (State.isLocalPassAndPlay) {
-        syncLocalView();
-      }
       renderAll();
       sendPacket('STATE_UPDATE', {
         boardChain: State.boardChain,
