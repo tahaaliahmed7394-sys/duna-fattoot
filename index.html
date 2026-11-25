@@ -447,6 +447,29 @@
       font-size: 0.78rem;
       color: var(--gold-light);
     }
+    .score-target-picker {
+      margin-top: 1rem;
+      padding: 0.65rem 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255, 215, 0, 0.35);
+      border-radius: 0.9rem;
+      color: var(--gold-light);
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+    .score-target-picker select {
+      min-width: 6rem;
+      padding: 0.35rem 0.7rem;
+      border: 1px solid var(--rose);
+      border-radius: 999px;
+      background: var(--wine);
+      color: #fff;
+      font: inherit;
+    }
 
     /* Opponent Hidden Hand (only tile counts and backs) */
     .opp-tiles-rack {
@@ -507,26 +530,38 @@
     /* Domino Play Area / Chain Scroll Viewport */
     .domino-board-viewport {
       flex: 1;
-      overflow: auto;
+      overflow-x: auto;
+      overflow-y: hidden;
       position: relative;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       padding: 4rem 2rem 5rem;
       z-index: 10;
       cursor: grab;
+      direction: ltr;
       touch-action: pan-x pan-y;
+      overscroll-behavior-x: contain;
+      scrollbar-width: thin;
+      scrollbar-color: var(--rose) rgba(255,255,255,0.12);
     }
     .domino-board-viewport:active {
       cursor: grabbing;
+    }
+    .domino-board-viewport::-webkit-scrollbar { height: 6px; }
+    .domino-board-viewport::-webkit-scrollbar-thumb {
+      background: var(--rose);
+      border-radius: 6px;
     }
     .domino-chain-container {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 4px;
+      width: max-content;
       min-width: 100%;
       padding: 2rem;
+      direction: ltr;
       transform-origin: center center;
       transition: transform 0.2s ease-out;
     }
@@ -671,20 +706,20 @@
     /* Quick Interaction Reactions floating bar */
     .reactions-bar {
       position: absolute;
-      bottom: 140px;
-      right: 15px;
+      top: 7rem;
+      right: 0.75rem;
       z-index: 30;
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
+      flex-direction: row;
+      gap: 0.3rem;
     }
     .btn-reaction {
-      width: 44px;
-      height: 44px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       background: rgba(25, 6, 17, 0.85);
       border: 1.5px solid var(--rose);
-      font-size: 1.3rem;
+      font-size: 1rem;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -984,6 +1019,15 @@
         </button>
       </div>
 
+      <div class="score-target-picker">
+        <label for="targetScoreSelect">نقاط الفوز بالمباراة</label>
+        <select id="targetScoreSelect" onchange="setTargetScore(this.value)">
+          <option value="51">51</option>
+          <option value="101" selected>101</option>
+          <option value="151">151</option>
+        </select>
+      </div>
+
       <!-- Action Choice: Create Game vs Join Game -->
       <div class="action-panel" id="lobbyInitialActions">
         <button class="btn-main" onclick="startHostGame()">
@@ -1084,6 +1128,7 @@
         <div class="hand-title">
           <span>قطعك الخاصة (<span id="myTilesCount">7</span>)</span>
           <span style="font-size:0.8rem; color:rgba(255,255,255,0.6);">(المجموع: <span id="myPipSum">0</span> نقطة)</span>
+          <span class="score-badge">نقاطك: <strong id="myScoreDisplay">0</strong></span>
         </div>
         <div class="boneyard-counter">
           🀰 المخزن: <strong id="boneyardCount">14</strong> قطعة
@@ -1133,7 +1178,7 @@
       <div class="modal-title" id="modalWinnerTitle">فوز رائع!</div>
       <div class="modal-desc" id="modalWinnerDesc">مبروك الفوز بالجولة</div>
       <button class="btn-main" onclick="handleNextRound()">
-        <span>🎮 بدء الجولة التالية</span>
+        <span id="roundWinnerButtonText">🎮 بدء الجولة التالية</span>
       </button>
     </div>
   </div>
@@ -1273,6 +1318,7 @@
       isSpeakerMuted: false,
       voiceCall: null,
       voiceCallStarted: false,
+      pendingVoiceCall: null,
       isLocalPassAndPlay: false,
       matchInitialized: false,
       openingTileId: null,
@@ -1283,11 +1329,12 @@
       boneyard: [],            // Held only by Host
       boneyardCount: 14,
       boardChain: [],          // [{ left, right, isDouble }, ...]
+      boardFocusSide: 'right',
       openEnds: { left: null, right: null },
       currentTurnRole: 'Taha', // Whose turn is it
       selectedTileIndex: null,
       scores: { Taha: 0, Fattoot: 0 },
-      targetScore: 100,
+      targetScore: 101,
       consecutivePasses: 0,
       isGameOver: false,
       isRoundOver: false,
@@ -1301,6 +1348,14 @@
       State.oppRole = role === 'Taha' ? 'Fattoot' : 'Taha';
       document.getElementById('btnRoleTaha').classList.toggle('selected', role === 'Taha');
       document.getElementById('btnRoleFattoot').classList.toggle('selected', role === 'Fattoot');
+    }
+
+    function setTargetScore(value) {
+      const target = Number(value);
+      if (![51, 101, 151].includes(target)) {
+        throw new RangeError('Unsupported target score');
+      }
+      State.targetScore = target;
     }
 
     function showJoinSection() {
@@ -1324,10 +1379,14 @@
       return code;
     }
 
-    function startLocalTwoPlayersGame() {
+    function startLocalTwoPlayersGame(resetScores = true) {
       initAudio();
+      setTargetScore(document.getElementById('targetScoreSelect').value);
       State.isHost = true;
       State.isLocalPassAndPlay = true;
+      if (resetScores) State.scores = { Taha: 0, Fattoot: 0 };
+      State.isGameOver = false;
+      State.isRoundOver = false;
       
       const deck = shuffleDeck(generateFullDeck());
       State.localP1Hand = deck.slice(0, 7); // Taha
@@ -1335,6 +1394,7 @@
       State.boneyard = deck.slice(14);
       State.boneyardCount = State.boneyard.length;
       State.boardChain = [];
+      State.boardFocusSide = 'right';
       State.openEnds = { left: null, right: null };
       State.consecutivePasses = 0;
 
@@ -1385,6 +1445,7 @@
     function startHostGame() {
       try {
         initAudio();
+        setTargetScore(document.getElementById('targetScoreSelect').value);
         State.isHost = true;
         State.myRole = 'Taha';
         State.oppRole = 'Fattoot';
@@ -1416,9 +1477,6 @@
           setupDataConnectionHandlers();
           updateCallStatus('متصل! جاري بدء اللعبة...', true);
           setupIncomingPeerCalls();
-          setTimeout(() => {
-            if (!State.voiceCallStarted) startVoiceCall();
-          }, 800);
           setTimeout(hostInitializeNewMatch, 600);
         });
 
@@ -1490,24 +1548,62 @@
        ---------------------------------------------------- */
     function startVoiceCall() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert('المتصفح لا يدعم المايكروفون المباشر. استخدم HTTPS أو متصفح Chrome/Safari حديثاً.');
+        updateCallStatus('المايك يحتاج HTTPS ومتصفح حديث', false);
         return;
       }
       if (State.voiceCallStarted) return;
       if (!State.dataConn || !State.dataConn.open) return;
       State.voiceCallStarted = true;
-      navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      updateCallStatus('جاري تشغيل المايك...', false);
+      getLocalAudioStream()
         .then((stream) => {
-          State.localAudioStream = stream;
-          const targetPeerId = State.dataConn.peer;
-          const call = State.peer.call(targetPeerId, stream);
+          if (!State.peer || !State.dataConn || !State.dataConn.open) {
+            throw new Error('Voice connection is not ready');
+          }
+          const call = State.peer.call(State.dataConn.peer, stream);
+          if (!call) throw new Error('Could not create voice call');
           State.voiceCall = call;
           setupRemoteVoice(call);
         })
         .catch((err) => {
           State.voiceCallStarted = false;
-          console.log('Voice permission denied or not supported:', err);
-          alert('لم يتم السماح للميكروفون. اسمح للمتصفح باستخدام المايك ثم أعد الاتصال.');
+          console.warn('Could not start voice call:', err);
+          updateCallStatus('اسمح للمايك ثم اضغط 🎙️ للمحاولة', false);
+        });
+    }
+
+    function getLocalAudioStream() {
+      if (State.localAudioStream && State.localAudioStream.getAudioTracks().some(track => track.readyState === 'live')) {
+        return Promise.resolve(State.localAudioStream);
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return Promise.reject(new Error('Microphone access requires HTTPS and a supported browser'));
+      }
+      return navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false
+      }).then((stream) => {
+        State.localAudioStream = stream;
+        stream.getAudioTracks().forEach(track => { track.enabled = !State.isMuted; });
+        return stream;
+      });
+    }
+
+    function answerVoiceCall(call) {
+      if (!call || State.pendingVoiceCall !== call) return;
+      updateCallStatus('جاري تشغيل المايك...', false);
+      getLocalAudioStream()
+        .then((stream) => {
+          if (State.pendingVoiceCall !== call) return;
+          State.pendingVoiceCall = null;
+          State.voiceCall = call;
+          State.voiceCallStarted = true;
+          call.answer(stream);
+          setupRemoteVoice(call);
+        })
+        .catch((err) => {
+          console.warn('Could not enable microphone for incoming call:', err);
+          updateCallStatus('اسمح للمايك ثم اضغط 🎙️ للرد', false);
         });
     }
 
@@ -1515,35 +1611,32 @@
       if (!State.peer) return;
       State.peer.off && State.peer.off('call');
       State.peer.on('call', (call) => {
-        if (State.voiceCall) {
+        if (State.voiceCall || State.pendingVoiceCall) {
           call.close();
           return;
         }
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          call.answer();
-          setupRemoteVoice(call);
-          return;
-        }
-        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-          .then((stream) => {
-            State.localAudioStream = stream;
-            State.voiceCall = call;
-            call.answer(stream);
-            setupRemoteVoice(call);
-          })
-          .catch((err) => {
-            console.log('Guest voice permission denied:', err);
-            call.answer();
-            setupRemoteVoice(call);
-            alert('لم يتم السماح للميكروفون. الصوت الصادر لن يعمل حتى تمنح الإذن.');
-          });
+        State.pendingVoiceCall = call;
+        answerVoiceCall(call);
       });
     }
 
     function setupRemoteVoice(call) {
       call.on('close', () => {
-        State.voiceCall = null;
+        if (State.voiceCall === call) {
+          State.voiceCall = null;
+          State.voiceCallStarted = false;
+          document.getElementById('remoteAudio').srcObject = null;
+        }
         updateCallStatus('انقطع الصوت 🔴', false);
+      });
+      call.on('error', (err) => {
+        console.warn('Voice call error:', err);
+        if (State.voiceCall === call) {
+          State.voiceCall = null;
+          State.voiceCallStarted = false;
+          document.getElementById('remoteAudio').srcObject = null;
+        }
+        updateCallStatus('تعذر اتصال الصوت؛ اضغط 🎙️ للمحاولة', false);
       });
       call.on('stream', (remoteStream) => {
         const audioEl = document.getElementById('remoteAudio');
@@ -1558,7 +1651,22 @@
     }
 
     document.getElementById('btnToggleMic').addEventListener('click', () => {
-      if (!State.localAudioStream) return;
+      if (State.pendingVoiceCall) {
+        answerVoiceCall(State.pendingVoiceCall);
+        return;
+      }
+      if (!State.localAudioStream) {
+        if (State.isHost) startVoiceCall();
+        else updateCallStatus('جاري انتظار اتصال الصوت من الشريك...', false);
+        return;
+      }
+      if (State.isHost && !document.getElementById('remoteAudio').srcObject) {
+        if (State.voiceCall) State.voiceCall.close();
+        State.voiceCall = null;
+        State.voiceCallStarted = false;
+        startVoiceCall();
+        return;
+      }
       const track = State.localAudioStream.getAudioTracks()[0];
       if (track) {
         State.isMuted = !State.isMuted;
@@ -1573,6 +1681,11 @@
       State.isSpeakerMuted = !State.isSpeakerMuted;
       const audioEl = document.getElementById('remoteAudio');
       audioEl.muted = State.isSpeakerMuted;
+      if (!State.isSpeakerMuted && audioEl.srcObject) {
+        audioEl.play().catch(() => {
+          updateCallStatus('اضغط 🔊 مجدداً لتشغيل صوت الشريك', false);
+        });
+      }
       const btn = document.getElementById('btnToggleSpeaker');
       btn.textContent = State.isSpeakerMuted ? '🔇' : '🔊';
       btn.classList.toggle('muted', State.isSpeakerMuted);
@@ -1596,6 +1709,7 @@
       State.dataConn.on('open', () => {
         console.log('P2P Data Channel Ready!');
         updateCallStatus('متصل بالكامل 💚', true);
+        if (State.isHost && !State.voiceCallStarted) startVoiceCall();
       });
 
       State.dataConn.on('data', (packet) => {
@@ -1617,11 +1731,16 @@
         State.oppTilesCount = payload.oppCount;
         State.boneyardCount = payload.boneyardCount;
         State.boardChain = payload.boardChain;
+        State.boardFocusSide = 'right';
+        State.scores = payload.scores;
+        State.targetScore = payload.targetScore;
+        State.isGameOver = false;
         State.openEnds = payload.openEnds;
         State.currentTurnRole = payload.currentTurnRole;
         State.openingTileId = payload.openingTileId ?? null;
         State.matchInitialized = true;
         State.isRoundOver = false;
+        document.getElementById('roundWinnerModal').classList.remove('active');
         switchToGameScreen();
         renderAll();
       }
@@ -1632,13 +1751,28 @@
         State.oppTilesCount = payload.oppTilesCount;
         State.boneyardCount = payload.boneyardCount;
         State.currentTurnRole = payload.currentTurnRole;
+        if (payload.playedSide === 'left' || payload.playedSide === 'right') {
+          State.boardFocusSide = payload.playedSide;
+        }
         if (packet.sender && packet.sender === 'Taha') {
           State.hostPips = payload.senderPips ?? State.hostPips;
         } else if (packet.sender) {
           State.guestPips = payload.senderPips ?? State.guestPips;
         }
         renderAll();
+        if (payload.playedSide === 'left' || payload.playedSide === 'right') {
+          scrollBoardToSide(payload.playedSide);
+        }
         playSound('place');
+      }
+      else if (type === 'NEW_GAME_REQUEST') {
+        if (State.isHost && State.isGameOver) {
+          document.getElementById('roundWinnerModal').classList.remove('active');
+          State.scores = { Taha: 0, Fattoot: 0 };
+          State.isGameOver = false;
+          State.isRoundOver = false;
+          hostInitializeNewMatch();
+        }
       }
       else if (type === 'DREW_TILE_RESULT') {
         // Only sent to the specific drawer
@@ -1660,9 +1794,11 @@
         if (State.isHost) {
           const myPips = State.myHand.reduce((acc, t) => acc + t.left + t.right, 0);
           const guestPips = payload.pips;
-          let winnerRole;
-          if (guestPips === myPips) winnerRole = State.myRole;
-          else winnerRole = guestPips < myPips ? payload.role : State.myRole;
+          if (guestPips === myPips) {
+            finishRound(null, 'blocked', 0);
+            return;
+          }
+          const winnerRole = guestPips < myPips ? payload.role : State.myRole;
           const loserPips = winnerRole === State.myRole ? guestPips : myPips;
           finishRound(winnerRole, 'blocked', loserPips);
         }
@@ -1692,10 +1828,12 @@
       State.boneyard = deck.slice(14); // 14 tiles left in boneyard
       State.boneyardCount = State.boneyard.length;
       State.boardChain = [];
+      State.boardFocusSide = 'right';
       State.openEnds = { left: null, right: null };
       State.consecutivePasses = 0;
       State.matchInitialized = true;
       State.isRoundOver = false;
+      State.isGameOver = false;
 
       // Decide who starts according to domino rules: Highest Double (or highest pip tile)
       let startingRole = State.myRole;
@@ -1743,7 +1881,9 @@
         boardChain: [],
         openEnds: { left: null, right: null },
         currentTurnRole: startingRole,
-        openingTileId: openingTile.id
+        openingTileId: openingTile.id,
+        scores: State.scores,
+        targetScore: State.targetScore
       });
 
       switchToGameScreen();
@@ -1808,6 +1948,7 @@
       renderTurnBanner();
       document.getElementById('boneyardCount').textContent = State.boneyardCount;
       document.getElementById('oppScoreDisplay').textContent = State.scores[State.oppRole];
+      document.getElementById('myScoreDisplay').textContent = State.scores[State.myRole];
       scheduleAutomaticDraw();
     }
 
@@ -1889,6 +2030,38 @@
         container.appendChild(rightTarget);
       }
     }
+
+    function scrollBoardToSide(side) {
+      const viewport = document.getElementById('boardViewport');
+      requestAnimationFrame(() => {
+        const maxScroll = viewport.scrollWidth - viewport.clientWidth;
+        viewport.scrollTo({
+          left: side === 'left' ? 0 : maxScroll,
+          behavior: 'smooth'
+        });
+      });
+    }
+
+    (function enableBoardMouseDrag() {
+      const viewport = document.getElementById('boardViewport');
+      let dragStart = null;
+
+      viewport.addEventListener('pointerdown', (event) => {
+        if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('.board-drop-target')) return;
+        dragStart = { pointerId: event.pointerId, x: event.clientX, scrollLeft: viewport.scrollLeft };
+        viewport.setPointerCapture(event.pointerId);
+      });
+      viewport.addEventListener('pointermove', (event) => {
+        if (dragStart && event.pointerId === dragStart.pointerId) {
+          viewport.scrollLeft = dragStart.scrollLeft - (event.clientX - dragStart.x);
+        }
+      });
+      const stopDragging = (event) => {
+        if (dragStart && event.pointerId === dragStart.pointerId) dragStart = null;
+      };
+      viewport.addEventListener('pointerup', stopDragging);
+      viewport.addEventListener('pointercancel', stopDragging);
+    })();
 
     function renderMyHand() {
       const container = document.getElementById('myTilesScroll');
@@ -2004,6 +2177,7 @@
       State.myHand.splice(State.selectedTileIndex, 1);
       State.selectedTileIndex = null;
       State.consecutivePasses = 0;
+      State.boardFocusSide = side === 'left' ? 'left' : 'right';
       playSound('place');
 
       // Check Domino Win (Hand emptied!)
@@ -2021,10 +2195,12 @@
         syncLocalView();
       }
       renderAll();
+      scrollBoardToSide(State.boardFocusSide);
 
       // Broadcast to partner
       sendPacket('STATE_UPDATE', {
         boardChain: State.boardChain,
+        playedSide: State.boardFocusSide,
         openEnds: State.openEnds,
         oppTilesCount: State.myHand.length,
         boneyardCount: State.boneyardCount,
@@ -2063,7 +2239,7 @@
     }
 
     function scheduleAutomaticDraw() {
-      if (State.isGameOver) return;
+      if (State.isGameOver || State.isRoundOver) return;
       if (State.currentTurnRole !== State.myRole) return;
       if (State.boardChain.length === 0) return;
 
@@ -2133,48 +2309,102 @@
 
     function handleBlockedGameCheck() {
       // Smallest pip sum wins in blocked game
+      if (State.isLocalPassAndPlay) {
+        const tahaPips = State.localP1Hand.reduce((sum, tile) => sum + tile.left + tile.right, 0);
+        const fattootPips = State.localP2Hand.reduce((sum, tile) => sum + tile.left + tile.right, 0);
+        if (tahaPips === fattootPips) {
+          finishRound(null, 'blocked', 0);
+          return;
+        }
+        const winnerRole = tahaPips < fattootPips ? 'Taha' : 'Fattoot';
+        finishRound(winnerRole, 'blocked', Math.max(tahaPips, fattootPips));
+        return;
+      }
       const myPips = State.myHand.reduce((acc, t) => acc + t.left + t.right, 0);
       sendPacket('BLOCKED_GAME_EVAL', { pips: myPips, role: State.myRole });
     }
 
     function finishRound(winnerRole, reason, lostPips = 0) {
+      if (State.isRoundOver) return;
       playSound('win');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
       State.isRoundOver = true;
-      let pointsGained = reason === 'domino'
-        ? lostPips
-        : lostPips;
-      if (!Number.isFinite(pointsGained) || pointsGained < 1) pointsGained = 1;
-      State.scores[winnerRole] += pointsGained;
+      const pointsGained = winnerRole
+        ? Math.max(1, Number.isFinite(lostPips) ? Math.floor(lostPips) : 0)
+        : 0;
+      if (winnerRole) State.scores[winnerRole] += pointsGained;
+      State.isGameOver = Boolean(winnerRole && State.scores[winnerRole] >= State.targetScore);
 
-      const isMeWinner = winnerRole === State.myRole;
-      const title = isMeWinner ? 'دومينو! فزتِ يا روحي 🎉' : 'مبروك لشريكك الفوز بالجولة ❤️';
-      const desc = isMeWinner ? `أنهيتِ كل قطعك ببراعة واكتسبتِ ${pointsGained} نقطة!` : 'جولة رائعة وممتعة بينكما';
-
-      document.getElementById('modalWinnerTitle').textContent = title;
-      document.getElementById('modalWinnerDesc').textContent = desc;
-      document.getElementById('roundWinnerModal').classList.add('active');
-
-      sendPacket('ROUND_WIN', { winnerRole, reason, pointsGained, scores: State.scores });
+      const result = {
+        winnerRole,
+        reason,
+        pointsGained,
+        scores: { ...State.scores },
+        targetScore: State.targetScore,
+        gameOver: State.isGameOver
+      };
+      showRoundResult(result);
+      sendPacket('ROUND_WIN', result);
     }
 
     function handleRoundWinnerNotification(payload) {
       State.scores = payload.scores;
+      State.targetScore = payload.targetScore;
+      State.isRoundOver = true;
+      State.isGameOver = payload.gameOver;
       playSound('win');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      const isMeWinner = payload.winnerRole === State.myRole;
-      const title = isMeWinner ? 'دومينو! فزتِ يا روحي 🎉' : 'مبروك لشريكك الفوز بالجولة ❤️';
-      const desc = `انتهت الجولة واكتسب الفائز ${payload.pointsGained} نقطة!`;
+      showRoundResult(payload);
+    }
 
+    function showRoundResult(result) {
+      const { winnerRole, pointsGained, scores, targetScore, gameOver } = result;
+      const isTie = !winnerRole;
+      const isMeWinner = winnerRole === State.myRole;
+      const winnerName = winnerRole === 'Taha' ? 'طه' : 'فطوط';
+      const title = isTie
+        ? 'تعادل بالربط'
+        : gameOver
+          ? (isMeWinner ? 'فزت بالمباراة! 🏆' : `فاز ${winnerName} بالمباراة 🏆`)
+          : (isMeWinner ? 'فزت بالجولة! 🎉' : `فاز ${winnerName} بالجولة ❤️`);
+      const desc = isTie
+        ? 'تعادل مجموع الصايات، ما تنضاف نقاط. نعيد الجولة.'
+        : gameOver
+          ? `وصل ${winnerName} إلى ${scores[winnerRole]} من ${targetScore} نقطة وفاز بالمباراة.`
+          : `${winnerName} حصل على ${pointsGained} نقطة. المجموع: ${scores[winnerRole]} من ${targetScore}.`;
+
+      document.getElementById('myScoreDisplay').textContent = State.scores[State.myRole];
+      document.getElementById('oppScoreDisplay').textContent = State.scores[State.oppRole];
       document.getElementById('modalWinnerTitle').textContent = title;
       document.getElementById('modalWinnerDesc').textContent = desc;
+      document.getElementById('roundWinnerButtonText').textContent = gameOver
+        ? '🔄 لعبة جديدة'
+        : isTie
+          ? '🔄 إعادة الجولة'
+          : '🎮 بدء الجولة التالية';
       document.getElementById('roundWinnerModal').classList.add('active');
     }
 
     function handleNextRound() {
       document.getElementById('roundWinnerModal').classList.remove('active');
       State.isRoundOver = false;
+      if (State.isLocalPassAndPlay) {
+        if (State.isGameOver) State.scores = { Taha: 0, Fattoot: 0 };
+        startLocalTwoPlayersGame(State.isGameOver);
+        return;
+      }
+      if (State.isGameOver) {
+        if (State.isHost) {
+          State.scores = { Taha: 0, Fattoot: 0 };
+          State.isGameOver = false;
+          hostInitializeNewMatch();
+        } else {
+          sendPacket('NEW_GAME_REQUEST', {});
+          updateCallStatus('بانتظار صاحب الغرفة لبدء لعبة جديدة...', false);
+        }
+        return;
+      }
       if (State.isHost) {
         hostInitializeNewMatch();
       }
