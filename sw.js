@@ -1,11 +1,15 @@
-const CACHE_NAME = 'domino-duo-cache-v10';
+const CACHE_NAME = 'domino-duo-cache-v11';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
+  './manifest.json?v=39f6e93',
   './icon-192.png',
+  './icon-192.png?v=39f6e93',
   './icon-512.png',
-  './logo.svg'
+  './icon-512.png?v=39f6e93',
+  './logo.svg',
+  './logo.svg?v=39f6e93'
 ];
 
 self.addEventListener('install', (event) => {
